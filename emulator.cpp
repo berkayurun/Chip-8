@@ -21,7 +21,7 @@ class chip8 {
 		unsigned short sp;
 
 		unsigned char key[16];
-
+		bool drawFlag;
 
 		unsigned char chip8_fontset[80] =
 		{
@@ -45,6 +45,7 @@ class chip8 {
 
 		void initialize(void);
 		void emulateCycle(void);
+		void loadProgram(void);
 };
 
 void chip8::initialize()
@@ -67,9 +68,12 @@ void chip8::initialize()
 
 	delay_timer = 0;
 	sound_timer = 0;
+}
 
+void chip8::loadProgram()
+{
 	//load programm into memory
-	FILE *f = fopen("./programs/picture.ch8", "rb");
+	FILE *f = fopen("./chip8-test-rom/test_opcode.ch8", "rb");
 
 	if(f == NULL){
 		perror("Program could not opened");
@@ -91,9 +95,10 @@ void chip8::initialize()
 
 	fread(buff, 1, size, f);
 
-	for(int i = 0; i < size; i++){
+	for(size_t i = 0; i < size; i++){
 		memory[i + 0x200] = buff[i];
 	}
+
 }
 
 void chip8::emulateCycle()
@@ -101,15 +106,140 @@ void chip8::emulateCycle()
 	//fetch
 	opcode = memory[pc] << 8 | memory[pc + 1];
 
+	printf("Opcode: %x\n", opcode);
 	//decode
-	switch(opcode & 0xF00)
+	switch(opcode & 0xF000)
 	{
-		case 0xA00:
+		case 0x0000:
+		{
+			if(opcode & 0x0F00 != 0){
+				//CALL
+				short nnn = opcode & 0x0FFF;
+				pc = nnn;
+				break;
+			} else if(opcode & 0x000F != 0xE){
+				//Display
+				printf("00E0 not implemented\n");
+				exit(EXIT_FAILURE);
+				break;
+			} else {
+				//Return
+				sp--;
+				pc = stack[sp];
+				//FIXME
+				pc += 2;
+				break;
+			}
+		}
+		case 0xA000:
+		{
 			I = opcode & 0x0FFF;
 			pc += 2;
 			break;
+		}
+		case 0x1000:
+		{
+			pc = opcode & 0x0FFF;
+			break;
+		}
+		case 0x2000:
+		{
+			short nnn = opcode & 0x0FFF;
+			stack[sp] = pc;
+			sp++;
+			pc = nnn;
+			break;
+		}
+		case 0x3000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			short nn = opcode & 0x00FF;
+			
+			if(registerFile[x] == nn)
+				pc += 4;
+			else
+				pc += 2;
+			break;
+		}
+		case 0x4000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			short nn = opcode & 0x00FF;
+			
+			if(registerFile[x] != nn)
+				pc += 4;
+			else
+				pc += 2;
+			break;
+		}
+		case 0x5000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			short y = (opcode & 0x00F0) >> 4;
+			
+			if(registerFile[x] == registerFile[y])
+				pc += 4;
+			else
+				pc += 2;
+			break;
+		}
+		case 0x6000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			short nn = opcode & 0x00FF;
+
+			registerFile[x] = nn;
+			pc += 2;
+			break;
+		}	
+		case 0x7000:
+		{
+			short x = opcode & 0x0F00;
+			short nn = opcode & 0x00FF;
+
+			registerFile[x] += nn;
+			pc += 2;
+			break;
+		}	
+		case 0x9000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			short y = (opcode & 0x00F0) >> 4;
+			
+			if(registerFile[x] != registerFile[y])
+				pc += 4;
+			else
+				pc += 2;
+			break;
+		}	
+		case 0xD000:		   
+		{
+		  unsigned short x = registerFile[(opcode & 0x0F00) >> 8];
+		  unsigned short y = registerFile[(opcode & 0x00F0) >> 4];
+		  unsigned short height = opcode & 0x000F;
+		  unsigned short pixel;
+
+		  registerFile[0xF] = 0;
+		  for (int yline = 0; yline < height; yline++)
+		  {
+		    pixel = memory[I + yline];
+		    for(int xline = 0; xline < 8; xline++)
+		    {
+		      if((pixel & (0x80 >> xline)) != 0)
+		      {
+			if(screen[(x + xline + ((y + yline) * 64))] == 1)
+			  registerFile[0xF] = 1;                                 
+			screen[x + xline + ((y + yline) * 64)] ^= 1;
+		      }
+		    }
+		  }
+
+		  drawFlag = true;
+		  pc += 2;
+		  break;
+		}
 		default:
-			perror("Opcode not yet implemented!");
+			perror("Opcode not avaliable!");
 			exit(EXIT_FAILURE);
 	}
 
@@ -125,7 +255,10 @@ chip8 chip;
 int main(){
 
 	chip.initialize();
-	chip.emulateCycle();
-
+	chip.loadProgram();
+	
+	while(true)
+		chip.emulateCycle();
+	
 	return 0;
 }
