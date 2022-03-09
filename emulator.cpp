@@ -112,24 +112,22 @@ void chip8::emulateCycle()
 	{
 		case 0x0000:
 		{
-			if(opcode & 0x0F00 != 0){
+			if((opcode & 0x0F00) != 0){
 				//CALL
 				short nnn = opcode & 0x0FFF;
 				pc = nnn;
-				break;
-			} else if(opcode & 0x000F != 0xE){
+			} else if((opcode & 0x000F) != 0xE){
 				//Display
 				printf("00E0 not implemented\n");
 				exit(EXIT_FAILURE);
-				break;
 			} else {
 				//Return
 				sp--;
 				pc = stack[sp];
 				//FIXME
 				pc += 2;
-				break;
 			}
+			break;
 		}
 		case 0xA000:
 		{
@@ -139,6 +137,10 @@ void chip8::emulateCycle()
 		}
 		case 0x1000:
 		{
+			printf("In 0x1000\n");
+			printf("pc: %x\n", pc);
+			if(pc  == (opcode & 0x0FFF))
+				exit(EXIT_FAILURE);
 			pc = opcode & 0x0FFF;
 			break;
 		}
@@ -194,11 +196,93 @@ void chip8::emulateCycle()
 		}	
 		case 0x7000:
 		{
-			short x = opcode & 0x0F00;
+			short x = (opcode & 0x0F00) >> 8;
 			short nn = opcode & 0x00FF;
 
 			registerFile[x] += nn;
 			pc += 2;
+			break;
+		}	
+		case 0x8000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			short y = (opcode & 0x00F0) >> 4;
+
+			switch(opcode & 0xF){
+				case 0x0:
+				{
+					registerFile[x] = registerFile[y];
+					pc += 2;	
+					break;	
+				}
+				case 0x1:
+				{
+					registerFile[x] = registerFile[x] | registerFile[y];
+					pc += 2;
+					break;
+				}
+				case 0x2:
+				{
+					registerFile[x] = registerFile[x] & registerFile[y];
+					pc += 2;
+					break;
+					
+				}
+				case 0x3:
+				{
+					registerFile[x] = registerFile[x] ^ registerFile[y];
+					pc += 2;
+					break;
+					
+				}
+				case 0x4:
+				{
+					if(registerFile[y] + registerFile[x] > 255)
+						registerFile[15] = 1;
+					else
+						registerFile[15] = 0;
+
+					registerFile[x] += registerFile[y];
+					pc += 2;
+					break;
+				}
+				case 0x5:
+				{
+					if(registerFile[y] > registerFile[x])
+						registerFile[15] = 1;
+					else
+						registerFile[15] = 0;
+
+					registerFile[x] -= registerFile[y];
+					pc += 2;
+					break;
+				}
+				case 0x6:
+				{
+					registerFile[15] = registerFile[x] & 0x0001;
+					registerFile[x] = registerFile[x] >> 1;
+					pc += 2;
+					break;					
+				}
+				case 0x7:
+				{
+					if(registerFile[y] < registerFile[x])
+						registerFile[15] = 1;
+					else
+						registerFile[15] = 0;
+
+					registerFile[x] = registerFile[y] - registerFile[x];
+					pc += 2;
+					break;
+				}
+				case 0xE:
+				{
+					registerFile[15] = registerFile[x] & 0x8000;
+					registerFile[x] = registerFile[x] << 1;
+					pc += 2;
+					break;					
+				}
+			}
 			break;
 		}	
 		case 0x9000:
@@ -237,6 +321,72 @@ void chip8::emulateCycle()
 		  drawFlag = true;
 		  pc += 2;
 		  break;
+		}
+		case 0xF000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+
+			switch(opcode & 0x00FF){
+				case 0x0007:
+				{
+					registerFile[x] = delay_timer;
+					pc += 2;
+					break;
+				}
+				case 0x000A:
+				{
+					printf("Not implemented\n");
+					exit(EXIT_FAILURE);
+				}
+				case 0x0015:
+				{
+					delay_timer = registerFile[x];
+					pc += 2;
+					break;
+				}
+				case 0x0018:
+				{
+					sound_timer = registerFile[x];
+					pc += 2;
+					break;
+				}
+				case 0x001E:
+				{
+					I += registerFile[x];
+					pc += 2;
+					break;
+				}
+				case 0x0029:
+				{
+					printf("Not implemented\n");
+					exit(EXIT_FAILURE);
+				}
+				case 0x0033:
+				{
+					memory[I] = registerFile[x] / 100;
+					memory[I + 1] = (registerFile[x] % 100) / 10;
+					memory[I + 2] = (registerFile[x] % 10);
+					pc += 2;
+					break;
+				}
+				case 0x0055:
+				{
+					for(int i = 0; i <= x; i++){
+						memory[I + i] = registerFile[i];
+					}
+					pc += 2;
+					break;
+				}
+				case 0x0065:
+				{
+					for(int i = 0; i <= x; i++){
+						registerFile[i] = memory[I + i];
+					}
+					pc += 2;
+					break;
+				}
+			}
+			break;
 		}
 		default:
 			perror("Opcode not avaliable!");
