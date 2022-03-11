@@ -21,7 +21,7 @@ class chip8 {
 		unsigned short sp;
 
 		unsigned char key[16];
-		bool drawFlag;
+		bool drawFlag = false;
 
 		unsigned char chip8_fontset[80] =
 		{
@@ -46,6 +46,7 @@ class chip8 {
 		void initialize(void);
 		void emulateCycle(void);
 		void loadProgram(void);
+		void drawGraphics(void);
 };
 
 void chip8::initialize()
@@ -73,7 +74,8 @@ void chip8::initialize()
 void chip8::loadProgram()
 {
 	//load programm into memory
-	FILE *f = fopen("./chip8-test-rom/test_opcode.ch8", "rb");
+	FILE *f = fopen("./programs/picture.ch8", "rb");
+	//FILE *f = fopen("./chip8-test-rom/test_opcode.ch8", "rb");
 
 	if(f == NULL){
 		perror("Program could not opened");
@@ -106,7 +108,7 @@ void chip8::emulateCycle()
 	//fetch
 	opcode = memory[pc] << 8 | memory[pc + 1];
 
-	printf("Opcode: %x\n", opcode);
+	//printf("Opcode: %x\n", opcode);
 	//decode
 	switch(opcode & 0xF000)
 	{
@@ -114,12 +116,15 @@ void chip8::emulateCycle()
 		{
 			if((opcode & 0x0F00) != 0){
 				//CALL
+				//FIXME
 				short nnn = opcode & 0x0FFF;
 				pc = nnn;
 			} else if((opcode & 0x000F) != 0xE){
 				//Display
-				printf("00E0 not implemented\n");
-				exit(EXIT_FAILURE);
+				for(int i = 0; i < 64 * 32; i++)
+					screen[i] = 0;
+				pc += 2;
+				break;
 			} else {
 				//Return
 				sp--;
@@ -137,10 +142,10 @@ void chip8::emulateCycle()
 		}
 		case 0x1000:
 		{
-			printf("In 0x1000\n");
-			printf("pc: %x\n", pc);
-			if(pc  == (opcode & 0x0FFF))
-				exit(EXIT_FAILURE);
+			//printf("In 0x1000\n");
+			//printf("pc: %x\n", pc);
+			//if(pc  == (opcode & 0x0FFF))
+			//	exit(EXIT_FAILURE);
 			pc = opcode & 0x0FFF;
 			break;
 		}
@@ -400,6 +405,19 @@ void chip8::emulateCycle()
 		sound_timer--;
 }
 
+void chip8::drawGraphics(){
+	for(int i = 0; i < 32; i++){
+		for(int j = 0; j < 64; j++){
+			if(screen[j + (64 * i)] != 0)
+				printf("\u25A0");
+			else
+				printf(" ");
+		}
+		printf("\n");
+	}
+	drawFlag = false;
+}
+
 chip8 chip;
 
 int main(){
@@ -407,8 +425,10 @@ int main(){
 	chip.initialize();
 	chip.loadProgram();
 	
-	while(true)
+	while(true){
 		chip.emulateCycle();
-	
+		if(chip.drawFlag)
+			chip.drawGraphics();
+	}
 	return 0;
 }
