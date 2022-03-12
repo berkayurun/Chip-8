@@ -2,6 +2,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <raylib.h>
+
 class chip8 {
 	public:
 		unsigned short opcode;
@@ -47,6 +49,7 @@ class chip8 {
 		void emulateCycle(void);
 		void loadProgram(void);
 		void drawGraphics(void);
+		void setKeys(void);
 };
 
 void chip8::initialize()
@@ -74,7 +77,7 @@ void chip8::initialize()
 void chip8::loadProgram()
 {
 	//load programm into memory
-	FILE *f = fopen("./programs/picture.ch8", "rb");
+	FILE *f = fopen("./programs/BRIX", "rb");
 	//FILE *f = fopen("./chip8-test-rom/test_opcode.ch8", "rb");
 
 	if(f == NULL){
@@ -124,12 +127,12 @@ void chip8::emulateCycle()
 				for(int i = 0; i < 64 * 32; i++)
 					screen[i] = 0;
 				pc += 2;
+				drawFlag = false;
 				break;
 			} else {
 				//Return
 				sp--;
 				pc = stack[sp];
-				//FIXME
 				pc += 2;
 			}
 			break;
@@ -253,7 +256,7 @@ void chip8::emulateCycle()
 				}
 				case 0x5:
 				{
-					if(registerFile[y] > registerFile[x])
+					if(registerFile[x] > registerFile[y])
 						registerFile[15] = 1;
 					else
 						registerFile[15] = 0;
@@ -271,7 +274,7 @@ void chip8::emulateCycle()
 				}
 				case 0x7:
 				{
-					if(registerFile[y] < registerFile[x])
+					if(registerFile[y] > registerFile[x])
 						registerFile[15] = 1;
 					else
 						registerFile[15] = 0;
@@ -282,7 +285,7 @@ void chip8::emulateCycle()
 				}
 				case 0xE:
 				{
-					registerFile[15] = registerFile[x] & 0x8000;
+					registerFile[15] = (registerFile[x] & 0x80) >> 7;
 					registerFile[x] = registerFile[x] << 1;
 					pc += 2;
 					break;					
@@ -301,10 +304,20 @@ void chip8::emulateCycle()
 				pc += 2;
 			break;
 		}	
+		case 0xC000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			short nn = (opcode & 0x00FF);
+			
+			registerFile[x] = nn & (rand() % 256);
+
+			pc += 2;
+			break;
+		}	
 		case 0xD000:		   
 		{
-		  unsigned short x = registerFile[(opcode & 0x0F00) >> 8];
-		  unsigned short y = registerFile[(opcode & 0x00F0) >> 4];
+		  unsigned short x = (registerFile[(opcode & 0x0F00) >> 8]) % 64;
+		  unsigned short y = (registerFile[(opcode & 0x00F0) >> 4]) % 32;
 		  unsigned short height = opcode & 0x000F;
 		  unsigned short pixel;
 
@@ -327,6 +340,29 @@ void chip8::emulateCycle()
 		  pc += 2;
 		  break;
 		}
+		case 0xE000:
+		{
+			short x = (opcode & 0x0F00) >> 8;
+			switch(opcode & 0x000F){
+				case 0x000E:
+				{
+					if(key[registerFile[x]] == 1)
+						pc += 4;
+					else
+						pc += 2;
+					break;	
+				}
+				case 0x0001:
+				{
+					if(key[registerFile[x]] != 1)
+						pc += 4;
+					else
+						pc += 2;
+					break;	
+					
+				}
+			}
+		}
 		case 0xF000:
 		{
 			short x = (opcode & 0x0F00) >> 8;
@@ -340,8 +376,25 @@ void chip8::emulateCycle()
 				}
 				case 0x000A:
 				{
-					printf("Not implemented\n");
-					exit(EXIT_FAILURE);
+					pc += 2;
+
+					if(key[0]) registerFile[x] = 0;
+					else if(key[1]) registerFile[x] = 1;
+					else if(key[2]) registerFile[x] = 2;
+					else if(key[3]) registerFile[x] = 3;
+					else if(key[4]) registerFile[x] = 4;
+					else if(key[5]) registerFile[x] = 5;
+					else if(key[6]) registerFile[x] = 6;
+					else if(key[7]) registerFile[x] = 7;
+					else if(key[8]) registerFile[x] = 8;
+					else if(key[9]) registerFile[x] = 9;
+					else if(key[10]) registerFile[x] = 10;
+					else if(key[11]) registerFile[x] = 11;
+					else if(key[12]) registerFile[x] = 12;
+					else if(key[13]) registerFile[x] = 13;
+					else if(key[14]) registerFile[x] = 14;
+					else if(key[15]) registerFile[x] = 15;
+					else pc -= 2;
 				}
 				case 0x0015:
 				{
@@ -363,8 +416,10 @@ void chip8::emulateCycle()
 				}
 				case 0x0029:
 				{
-					printf("Not implemented\n");
-					exit(EXIT_FAILURE);
+					//FIXME
+					I = registerFile[x]*5;
+					pc += 2;
+					break;
 				}
 				case 0x0033:
 				{
@@ -406,29 +461,72 @@ void chip8::emulateCycle()
 }
 
 void chip8::drawGraphics(){
+	ClearBackground(BLACK);
 	for(int i = 0; i < 32; i++){
 		for(int j = 0; j < 64; j++){
 			if(screen[j + (64 * i)] != 0)
-				printf("\u25A0");
-			else
-				printf(" ");
+				DrawRectangle(j * 10, i * 10, 10, 10, GREEN);
 		}
-		printf("\n");
 	}
 	drawFlag = false;
 }
 
+
 chip8 chip;
 
 int main(){
+	//Init Raylab
+	const int screenWidth = 640;
+    	const int screenHeight = 320;
 
+	InitWindow(screenWidth, screenHeight, "Chip-8 Emulator");
+
+	InitAudioDevice();
+
+	Sound fxWav = LoadSound("beep.wav");
+	SetTargetFPS(60);
+
+	//Init Chip-8 Emulator
 	chip.initialize();
+
+	//Load Program
 	chip.loadProgram();
 	
-	while(true){
+	while(!WindowShouldClose()){
+		if (IsKeyDown(KEY_ZERO)) chip.key[0] = 1;
+		if (IsKeyDown(KEY_ONE)) chip.key[1] = 1;
+		if (IsKeyDown(KEY_TWO)) chip.key[2] = 1;
+		if (IsKeyDown(KEY_THREE)) chip.key[3] = 1;
+		if (IsKeyDown(KEY_FOUR)) chip.key[4] = 1;
+		if (IsKeyDown(KEY_FIVE)) chip.key[5] = 1;
+		if (IsKeyDown(KEY_SIX)) chip.key[6] = 1;
+		if (IsKeyDown(KEY_SEVEN)) chip.key[7] = 1;
+		if (IsKeyDown(KEY_EIGHT)) chip.key[8] = 1;
+		if (IsKeyDown(KEY_NINE)) chip.key[9] = 1;
+		if (IsKeyDown(KEY_A)) chip.key[10] = 1;
+		if (IsKeyDown(KEY_B)) chip.key[11] = 1;
+		if (IsKeyDown(KEY_C)) chip.key[12] = 1;
+		if (IsKeyDown(KEY_D)) chip.key[13] = 1;
+		if (IsKeyDown(KEY_E)) chip.key[14] = 1;
+		if (IsKeyDown(KEY_F)) chip.key[15] = 1;
+		
 		chip.emulateCycle();
-		if(chip.drawFlag)
-			chip.drawGraphics();
+
+		if(chip.sound_timer != 0)
+			PlaySound(fxWav);
+
+		BeginDrawing();
+		if(chip.drawFlag){
+			chip.drawGraphics();	
+		}
+
+        	EndDrawing();
+		for(int i = 0; i < 16; i++)
+			chip.key[i] = 0;
 	}
+
+	UnloadSound(fxWav);
+	CloseAudioDevice();
+	CloseWindow();
 	return 0;
 }
