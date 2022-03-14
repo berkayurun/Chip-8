@@ -3,6 +3,11 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <raylib.h>
+#include <string>
+#include <iostream>
+#include <experimental/filesystem>
+
+namespace fs = std::experimental::filesystem;
 
 class chip8 {
 	public:
@@ -47,7 +52,7 @@ class chip8 {
 
 		void initialize(void);
 		void emulateCycle(void);
-		void loadProgram(void);
+		void loadProgram(std::string);
 		void drawGraphics(void);
 		void setKeys(void);
 };
@@ -74,10 +79,10 @@ void chip8::initialize()
 	sound_timer = 0;
 }
 
-void chip8::loadProgram()
+void chip8::loadProgram(std::string location)
 {
 	//load programm into memory
-	FILE *f = fopen("./programs/BRIX", "rb");
+	FILE *f = fopen(location.c_str(), "rb");
 	//FILE *f = fopen("./chip8-test-rom/test_opcode.ch8", "rb");
 
 	if(f == NULL){
@@ -475,6 +480,16 @@ void chip8::drawGraphics(){
 chip8 chip;
 
 int main(){
+	chdir("./programs");
+    	for (const auto & entry : fs::directory_iterator("./"))
+        	std::cout << entry << std::endl;
+
+	//Parse program location
+	std::string input;
+
+	std::cout << "Enter selected program:";
+	std::cin >> input;
+
 	//Init Raylab
 	const int screenWidth = 640;
     	const int screenHeight = 320;
@@ -490,7 +505,7 @@ int main(){
 	chip.initialize();
 
 	//Load Program
-	chip.loadProgram();
+	chip.loadProgram(("./" + input).c_str());
 	
 	while(!WindowShouldClose()){
 		if (IsKeyDown(KEY_ZERO)) chip.key[0] = 1;
